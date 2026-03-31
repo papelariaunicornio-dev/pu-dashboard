@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Papelaria Unicórnio</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #222536;
+  --border: #2e3248;
+  --text: #e2e4f0;
+  --text-muted: #7b80a0;
+  --accent: #5b7cff;
+  --accent2: #a259ff;
+  --success: #2ecc71;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #06b6d4;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+/* HEADER */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border); gap: 16px; flex-wrap: wrap; }
+.logo { font-size: 18px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.logo span { color: var(--text-muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+
+/* DATE FILTER */
+.date-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.preset-btn { padding: 5px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; color: var(--text-muted); cursor: pointer; font-size: 12px; transition: all .15s; white-space: nowrap; }
+.preset-btn:hover, .preset-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.date-sep { color: var(--text-muted); font-size: 12px; }
+input[type="date"] { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+input[type="date"]:focus { outline: none; border-color: var(--accent); }
+.apply-btn { padding: 5px 14px; background: var(--accent); border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; transition: opacity .15s; }
+.apply-btn:hover { opacity: .85; }
+
+/* TABS */
+.tabs { display: flex; gap: 2px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab-btn { padding: 12px 20px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; font-weight: 500; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* CROSS-FILTER BAR */
+.cf-bar { display: none; padding: 8px 24px; background: var(--surface2); border-bottom: 1px solid var(--border); gap: 8px; flex-wrap: wrap; align-items: center; }
+.cf-bar.visible { display: flex; }
+.cf-label { font-size: 12px; color: var(--text-muted); }
+.cf-chip { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 12px; background: var(--accent); border-radius: 20px; font-size: 12px; color: #fff; }
+.cf-chip button { background: none; border: none; color: #fff; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+.cf-clear { padding: 3px 10px; background: none; border: 1px solid var(--danger); color: var(--danger); border-radius: 20px; font-size: 12px; cursor: pointer; }
+
+/* CONTENT */
+.content { padding: 20px 24px; max-width: 1800px; margin: 0 auto; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* KPI CARDS */
+.kpi-row { display: grid; gap: 14px; margin-bottom: 20px; }
+.kpi-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.kpi-row.cols-5 { grid-template-columns: repeat(5, 1fr); }
+.kpi-row.cols-6 { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 1200px) { .kpi-row.cols-6, .kpi-row.cols-5 { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px)  { .kpi-row { grid-template-columns: repeat(2, 1fr) !important; } }
+@media (max-width: 500px)  { .kpi-row { grid-template-columns: 1fr !important; } }
+
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; position: relative; overflow: hidden; }
+.kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--kpi-color, var(--accent)); }
+.kpi .label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+.kpi .value { font-size: 22px; font-weight: 700; color: var(--text); }
+.kpi .sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.kpi .delta { font-size: 11px; margin-top: 4px; }
+.kpi .delta.up { color: var(--success); }
+.kpi .delta.down { color: var(--danger); }
+
+/* CHART GRID */
+.chart-grid { display: grid; gap: 16px; margin-bottom: 16px; }
+.chart-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+.chart-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.chart-grid.cols-2-1 { grid-template-columns: 2fr 1fr; }
+.chart-grid.cols-1-2 { grid-template-columns: 1fr 2fr; }
+@media (max-width: 1000px) { .chart-grid.cols-2, .chart-grid.cols-3, .chart-grid.cols-2-1, .chart-grid.cols-1-2 { grid-template-columns: 1fr; } }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+.chart-wrap { width: 100%; }
+
+/* TABLE */
+.table-wrap { overflow-x: auto; margin-top: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { text-align: left; padding: 8px 12px; color: var(--text-muted); font-size: 12px; border-bottom: 1px solid var(--border); font-weight: 500; white-space: nowrap; }
+tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+tbody tr:hover { background: var(--surface2); }
+tbody td { padding: 8px 12px; color: var(--text); white-space: nowrap; }
+tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.badge-green  { background: rgba(46,204,113,.15); color: var(--success); }
+.badge-yellow { background: rgba(245,158,11,.15); color: var(--warning); }
+.badge-red    { background: rgba(239,68,68,.15);  color: var(--danger); }
+.badge-blue   { background: rgba(91,124,255,.15); color: var(--accent); }
+.badge-gray   { background: rgba(123,128,160,.15);color: var(--text-muted); }
+
+/* LOADING */
+.loading { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--text-muted); font-size: 13px; }
+.spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* SCROLL */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">🦄 Papelaria Unicórnio <span>Analytics</span></div>
+  <div class="date-filter">
+    <button class="preset-btn" data-preset="hoje">Hoje</button>
+    <button class="preset-btn" data-preset="ontem">Ontem</button>
+    <button class="preset-btn" data-preset="semana">Esta semana</button>
+    <button class="preset-btn" data-preset="semana-ant">Sem. passada</button>
+    <button class="preset-btn active" data-preset="mes">Este mês</button>
+    <button class="preset-btn" data-preset="mes-ant">Mês passado</button>
+    <button class="preset-btn" data-preset="3meses">3 meses</button>
+    <button class="preset-btn" data-preset="ano">Este ano</button>
+    <button class="preset-btn" data-preset="ano-ant">Ano passado</button>
+    <div class="date-sep">|</div>
+    <input type="date" id="dt-ini">
+    <span class="date-sep">→</span>
+    <input type="date" id="dt-fim">
+    <button class="apply-btn" id="btn-apply">Aplicar</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="geral">📊 Geral</button>
+  <button class="tab-btn" data-tab="vendas">🛒 Vendas</button>
+  <button class="tab-btn" data-tab="clientes">👥 Clientes</button>
+  <button class="tab-btn" data-tab="produtos">📦 Produtos</button>
+  <button class="tab-btn" data-tab="estoque">🗃️ Estoque</button>
+  <button class="tab-btn" data-tab="frete">🚚 Frete</button>
+  <button class="tab-btn" data-tab="financeiro">💰 Financeiro</button>
+</div>
+
+<!-- CROSS-FILTER BAR -->
+<div class="cf-bar" id="cf-bar">
+  <span class="cf-label">Filtros ativos:</span>
+  <div id="cf-chips"></div>
+  <button class="cf-clear" id="cf-clear">Limpar tudo</button>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- ── GERAL ── -->
+  <div class="tab-pane active" id="pane-geral">
+    <div class="kpi-row cols-6" id="geral-kpis">
+      <div class="loading"><div class="spinner"></div> Carregando...</div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card" style="grid-column: 1/-1;">
+        <div class="card-title">Faturamento diário</div>
+        <div class="chart-wrap" id="ch-geral-fat" style="height:260px"></div>
+      </div>
+    </div>
+    <div class="chart-grid cols-3">
+      <div class="card">
+        <div class="card-title">Pedidos por situação</div>
+        <div class="chart-wrap" id="ch-geral-sit" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Top 10 produtos do período</div>
+        <div class="chart-wrap" id="ch-geral-prod" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Assinantes Guru</div>
+        <div class="chart-wrap" id="ch-geral-guru" style="height:260px"></div>
+      </div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card">
+        <div class="card-title">Comparativo mensal (faturamento)</div>
+        <div class="chart-wrap" id="ch-geral-mensal" style="height:280px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Heatmap — pedidos por dia × hora</div>
+        <div class="chart-wrap" id="ch-geral-heat" style="height:280px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── VENDAS ── -->
+  <div class="tab-pane" id="pane-vendas">
+    <div class="kpi-row cols-5" id="vendas-kpis">
+      <div class="loading"><div class="spinner"></div> Carregando...</div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card" style="grid-column: 1/-1;">
+        <div class="card-title">Faturamento diário</div>
+        <div class="chart-wrap" id="ch-vendas-fat" style="height:240px"></div>
+      </div>
+    </div>
+    <div class="chart-grid cols-3">
+      <div class="card">
+        <div class="card-title">Por canal de venda</div>
+        <div class="chart-wrap" id="ch-vendas-canal" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Por forma de pagamento</div>
+        <div class="chart-wrap" id="ch-vendas-pag" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Pedidos por mês</div>
+        <div class="chart-wrap" id="ch-vendas-mensal" style="height:260px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Últimas vendas</div>
+      <div id="tbl-vendas-ultimas" class="table-wrap">
+        <div class="loading"><div class="spinner"></div> Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CLIENTES ── -->
+  <div class="tab-pane" id="pane-clientes">
+    <div class="kpi-row cols-4" id="clientes-kpis">
+      <div class="loading"><div class="spinner"></div> Carregando...</div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card">
+        <div class="card-title">Novos clientes por mês</div>
+        <div class="chart-wrap" id="ch-cli-novos" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Frequência de compra</div>
+        <div class="chart-wrap" id="ch-cli-freq" style="height:260px"></div>
+      </div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card">
+        <div class="card-title">Pedidos por UF</div>
+        <div class="chart-wrap" id="ch-cli-uf" style="height:320px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Top 20 clientes por faturamento</div>
+        <div id="tbl-clientes-top" class="table-wrap" style="max-height:320px;overflow-y:auto">
+          <div class="loading"><div class="spinner"></div> Carregando...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PRODUTOS ── -->
+  <div class="tab-pane" id="pane-produtos">
+    <div class="kpi-row cols-4" id="produtos-kpis">
+      <div class="loading"><div class="spinner"></div> Carregando...</div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card">
+        <div class="card-title">Top 20 produtos — receita</div>
+        <div class="chart-wrap" id="ch-prod-top" style="height:420px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Curva ABC (receita acumulada)</div>
+        <div class="chart-wrap" id="ch-prod-abc" style="height:420px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ESTOQUE ── -->
+  <div class="tab-pane" id="pane-estoque">
+    <div class="kpi-row cols-5" id="estoque-kpis">
+      <div class="loading"><div class="spinner"></div> Carregando...</div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card">
+        <div class="card-title">Top 20 por custo em estoque</div>
+        <div class="chart-wrap" id="ch-est-top" style="height:420px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Curva ABC do estoque (custo)</div>
+        <div class="chart-wrap" id="ch-est-abc" style="height:420px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">
+        Produtos encalhados
+        <span style="font-size:11px;color:var(--text-muted);font-weight:400">sem venda nos últimos 60 dias</span>
+      </div>
+      <div id="tbl-encalhados" class="table-wrap">
+        <div class="loading"><div class="spinner"></div> Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FRETE ── -->
+  <div class="tab-pane" id="pane-frete">
+    <div class="kpi-row cols-5" id="frete-kpis">
+      <div class="loading"><div class="spinner"></div> Carregando...</div>
+    </div>
+    <div class="chart-grid cols-3">
+      <div class="card">
+        <div class="card-title">Por forma de envio</div>
+        <div class="chart-wrap" id="ch-frete-envio" style="height:280px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Frete médio por UF destino</div>
+        <div class="chart-wrap" id="ch-frete-uf" style="height:280px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Status dos rastreios ativos</div>
+        <div class="chart-wrap" id="ch-frete-status" style="height:280px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Pedidos em trânsito</div>
+      <div id="tbl-rastreios" class="table-wrap">
+        <div class="loading"><div class="spinner"></div> Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FINANCEIRO ── -->
+  <div class="tab-pane" id="pane-financeiro">
+    <div class="kpi-row cols-5" id="fin-kpis">
+      <div class="loading"><div class="spinner"></div> Carregando...</div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-title">Receita diária</div>
+        <div class="chart-wrap" id="ch-fin-receita" style="height:240px"></div>
+      </div>
+    </div>
+    <div class="chart-grid cols-3">
+      <div class="card">
+        <div class="card-title">Guru — receita mensal</div>
+        <div class="chart-wrap" id="ch-fin-guru" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Assinaturas novas × cancelamentos</div>
+        <div class="chart-wrap" id="ch-fin-assin" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Contas a pagar por competência</div>
+        <div class="chart-wrap" id="ch-fin-contas" style="height:260px"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<script>
+// ─────────────────────────────────────────────
+// ESTADO GLOBAL
+// ─────────────────────────────────────────────
+const state = {
+  tab: 'geral',
+  ini: '',
+  fim: '',
+  cf: {}  // cross-filters: {field: value}
+};
+
+const COLORS = ['#5b7cff','#a259ff','#06b6d4','#2ecc71','#f59e0b','#ef4444','#ec4899','#8b5cf6','#10b981','#f97316'];
+const CHART_THEME = {
+  backgroundColor: 'transparent',
+  textStyle: { color: '#7b80a0', fontSize: 12 },
+  grid: { left: 16, right: 16, top: 10, bottom: 10, containLabel: true }
+};
+
+const charts = {};
+
+function initChart(id) {
+  if (charts[id]) charts[id].dispose();
+  const el = document.getElementById(id);
+  if (!el) return null;
+  charts[id] = echarts.init(el, 'dark', { renderer: 'canvas' });
+  charts[id].getZr().on('click', () => {});
+  return charts[id];
+}
+
+function fmt(v, type='money') {
+  if (v == null) return '—';
+  if (type === 'money') return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  if (type === 'int')   return Number(v).toLocaleString('pt-BR');
+  if (type === 'pct')   return Number(v).toFixed(1) + '%';
+  return v;
+}
+
+function kpiCard(label, value, sub='', color='var(--accent)') {
+  return `<div class="kpi" style="--kpi-color:${color}">
+    <div class="label">${label}</div>
+    <div class="value">${value}</div>
+    ${sub ? `<div class="sub">${sub}</div>` : ''}
+  </div>`;
+}
+
+async function api(path, params={}) {
+  const qs = new URLSearchParams({...params, data_ini: state.ini, data_fim: state.fim}).toString();
+  const r = await fetch(`${path}?${qs}`);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+// ─────────────────────────────────────────────
+// DATE FILTER
+// ─────────────────────────────────────────────
+function today() { return new Date().toISOString().split('T')[0]; }
+function addDays(d, n) { const dt = new Date(d); dt.setDate(dt.getDate()+n); return dt.toISOString().split('T')[0]; }
+function startOfWeek(d) { const dt = new Date(d); dt.setDate(dt.getDate() - ((dt.getDay()+6)%7)); return dt.toISOString().split('T')[0]; }
+function startOfMonth(d) { return d.slice(0,8)+'01'; }
+
+function applyPreset(preset) {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.toggle('active', b.dataset.preset === preset));
+  const t = today();
+  let ini, fim;
+  switch(preset) {
+    case 'hoje':     ini = fim = t; break;
+    case 'ontem':    ini = fim = addDays(t,-1); break;
+    case 'semana':   ini = startOfWeek(t); fim = t; break;
+    case 'semana-ant': const sw = addDays(startOfWeek(t),-7); ini = sw; fim = addDays(sw,6); break;
+    case 'mes':      ini = startOfMonth(t); fim = t; break;
+    case 'mes-ant':  const pm = new Date(t); pm.setDate(0); fim = pm.toISOString().split('T')[0]; pm.setDate(1); ini = pm.toISOString().split('T')[0]; break;
+    case '3meses':   ini = addDays(t,-90); fim = t; break;
+    case 'ano':      ini = t.slice(0,4)+'-01-01'; fim = t; break;
+    case 'ano-ant':  const py = parseInt(t.slice(0,4))-1; ini = py+'-01-01'; fim = py+'-12-31'; break;
+    default:         ini = startOfMonth(t); fim = t;
+  }
+  state.ini = ini; state.fim = fim;
+  document.getElementById('dt-ini').value = ini;
+  document.getElementById('dt-fim').value = fim;
+}
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => { applyPreset(btn.dataset.preset); loadTab(state.tab); });
+});
+
+document.getElementById('btn-apply').addEventListener('click', () => {
+  state.ini = document.getElementById('dt-ini').value;
+  state.fim = document.getElementById('dt-fim').value;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  loadTab(state.tab);
+});
+
+// ─────────────────────────────────────────────
+// CROSS-FILTERS
+// ─────────────────────────────────────────────
+function setCF(field, value) {
+  if (state.cf[field] === value) delete state.cf[field];
+  else state.cf[field] = value;
+  renderCFBar();
+  loadTab(state.tab);
+}
+
+function renderCFBar() {
+  const bar = document.getElementById('cf-bar');
+  const chips = document.getElementById('cf-chips');
+  const entries = Object.entries(state.cf);
+  bar.classList.toggle('visible', entries.length > 0);
+  chips.innerHTML = entries.map(([f,v]) =>
+    `<span class="cf-chip">${f}: <b>${v}</b>
+      <button onclick="removeCF('${f}')">×</button>
+    </span>`
+  ).join('');
+}
+
+function removeCF(field) { delete state.cf[field]; renderCFBar(); loadTab(state.tab); }
+document.getElementById('cf-clear').addEventListener('click', () => { state.cf = {}; renderCFBar(); loadTab(state.tab); });
+
+// ─────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('pane-'+btn.dataset.tab).classList.add('active');
+    state.tab = btn.dataset.tab;
+    loadTab(state.tab);
+    setTimeout(resizeAll, 100);
+  });
+});
+
+function resizeAll() {
+  Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} });
+}
+window.addEventListener('resize', resizeAll);
+
+// ─────────────────────────────────────────────
+// LOAD GERAL
+// ─────────────────────────────────────────────
+async function loadGeral() {
+  const [kpis, fatDiario, situacao, topProd, mensal, guru] = await Promise.all([
+    api('/api/geral/kpis'),
+    api('/api/geral/faturamento-diario'),
+    api('/api/geral/por-situacao'),
+    api('/api/geral/top-produtos', {limit:10}),
+    api('/api/geral/mensal-comparativo'),
+    api('/api/financeiro/assinaturas-mensal'),
+  ]);
+
+  // KPIs
+  document.getElementById('geral-kpis').innerHTML = [
+    kpiCard('Faturamento', fmt(kpis?.faturamento), `${fmt(kpis?.pedidos,'int')} pedidos`, '#5b7cff'),
+    kpiCard('Ticket Médio', fmt(kpis?.ticket_medio), '', '#a259ff'),
+    kpiCard('Cancelamentos', fmt(kpis?.cancelamentos,'int'), 'pedidos cancelados', '#ef4444'),
+    kpiCard('Novos Clientes', fmt(kpis?.novos_clientes,'int'), 'no período', '#2ecc71'),
+    kpiCard('Assinantes Guru', fmt(kpis?.assinantes_ativos,'int'), 'ativos agora', '#06b6d4'),
+    kpiCard('Pedidos', fmt(kpis?.pedidos,'int'), '', '#f59e0b'),
+  ].join('');
+
+  // Faturamento diário — linha + barras
+  const ch1 = initChart('ch-geral-fat');
+  if (ch1 && fatDiario?.length) {
+    ch1.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p => `${p[0].axisValue}<br/>${p.map(s=>`${s.marker}${s.seriesName}: <b>${fmt(s.value)}</b>`).join('<br/>')}` },
+      legend: { data:['Faturamento','Pedidos'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: fatDiario.map(r=>r.data), axisLabel:{color:'#7b80a0',rotate:30}, axisTick:{show:false} },
+      yAxis: [
+        { type:'value', name:'R$', axisLabel:{color:'#7b80a0', formatter: v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+        { type:'value', name:'Pedidos', axisLabel:{color:'#7b80a0'}, splitLine:{show:false} }
+      ],
+      series: [
+        { name:'Faturamento', type:'bar', data: fatDiario.map(r=>r.faturamento), itemStyle:{color:'#5b7cff',borderRadius:[4,4,0,0]}, yAxisIndex:0 },
+        { name:'Pedidos', type:'line', data: fatDiario.map(r=>r.pedidos), lineStyle:{color:'#06b6d4',width:2}, symbol:'circle', symbolSize:4, yAxisIndex:1 }
+      ]
+    });
+  }
+
+  // Situação — donut
+  const ch2 = initChart('ch-geral-sit');
+  if (ch2 && situacao?.length) {
+    const sitColors = { 'Entregue':'#2ecc71','Aprovado':'#5b7cff','Aguardando pagamento':'#f59e0b','Cancelado':'#ef4444','Em aberto':'#06b6d4' };
+    ch2.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'item', formatter:'{b}: {c} ({d}%)' },
+      legend: { orient:'vertical', right:10, textStyle:{color:'#7b80a0',fontSize:11} },
+      series: [{
+        type:'pie', radius:['45%','75%'], center:['40%','50%'],
+        data: situacao.map(r=>({ name:r.situacao||'N/D', value:r.total, itemStyle:{color:sitColors[r.situacao]||undefined} })),
+        label: { color:'#7b80a0', fontSize:11 },
+        emphasis: { itemStyle:{shadowBlur:10,shadowColor:'rgba(0,0,0,.5)'} }
+      }]
+    });
+    ch2.on('click', p => setCF('situacao', p.name));
+  }
+
+  // Top produtos — barras horizontais
+  const ch3 = initChart('ch-geral-prod');
+  if (ch3 && topProd?.length) {
+    const sorted = [...topProd].sort((a,b)=>a.receita-b.receita);
+    ch3.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p => `${p[0].axisValue}<br/>Receita: <b>${fmt(p[0].value)}</b>` },
+      xAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      yAxis: { type:'category', data: sorted.map(r=>r.descricao?.substring(0,30)), axisLabel:{color:'#7b80a0',fontSize:11} },
+      series: [{ type:'bar', data: sorted.map(r=>r.receita), itemStyle:{color: p => COLORS[p.dataIndex % COLORS.length], borderRadius:[0,4,4,0]}, label:{show:true,position:'right',color:'#7b80a0',fontSize:10,formatter:p=>p.value>=1000?'R$'+(p.value/1000).toFixed(1)+'k':'R$'+p.value.toFixed(0)} }]
+    });
+    ch3.on('click', p => setCF('produto', p.name));
+  }
+
+  // Guru assinaturas
+  const ch4 = initChart('ch-geral-guru');
+  if (ch4 && guru?.length) {
+    ch4.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis' },
+      legend: { data:['Novos','Cancelados'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: guru.map(r=>r.mes?.toString()?.slice(0,7)), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: { type:'value', axisLabel:{color:'#7b80a0'}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      series: [
+        { name:'Novos', type:'bar', stack:'total', data: guru.map(r=>r.novos||0), itemStyle:{color:'#2ecc71',borderRadius:[4,4,0,0]} },
+        { name:'Cancelados', type:'bar', stack:'total', data: guru.map(r=>r.cancelados||0), itemStyle:{color:'#ef4444',borderRadius:[4,4,0,0]} }
+      ]
+    });
+  }
+
+  // Mensal comparativo
+  const ch5 = initChart('ch-geral-mensal');
+  if (ch5 && mensal?.length) {
+    const anos = [...new Set(mensal.map(r=>r.ano))].sort().slice(-2);
+    const meses = [...new Set(mensal.map(r=>r.mes))].sort();
+    const mesNomes = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    ch5.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p => `${mesNomes[p[0].dataIndex+1]}<br/>${p.map(s=>`${s.marker}${s.seriesName}: <b>${fmt(s.value)}</b>`).join('<br/>')}` },
+      legend: { data: anos.map(String), textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: Array.from({length:12},(_,i)=>mesNomes[i+1]), axisLabel:{color:'#7b80a0'} },
+      yAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      series: anos.map((ano,i) => ({
+        name: String(ano), type:'bar',
+        data: Array.from({length:12},(_,m)=>{ const r=mensal.find(x=>x.ano===ano&&x.mes===m+1); return r?.faturamento||0; }),
+        itemStyle:{color:COLORS[i],borderRadius:[4,4,0,0]}, barGap:'10%'
+      }))
+    });
+  }
+
+  // Heatmap
+  const chH = initChart('ch-geral-heat');
+  const heat = await api('/api/geral/heatmap');
+  if (chH && heat?.length) {
+    const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const horas = Array.from({length:24},(_,i)=>i+'h');
+    const data = heat.map(r=>[r.hora, r.dia_semana, r.pedidos]);
+    const maxV = Math.max(...heat.map(r=>r.pedidos));
+    chH.setOption({ ...CHART_THEME,
+      tooltip: { formatter: p => `${dias[p.value[1]]} ${p.value[0]}h: <b>${p.value[2]} pedidos</b>` },
+      xAxis: { type:'category', data:horas, axisLabel:{color:'#7b80a0',fontSize:10} },
+      yAxis: { type:'category', data:dias, axisLabel:{color:'#7b80a0'} },
+      visualMap: { min:0, max:maxV, calculable:true, show:false, inRange:{color:['#1a1d27','#5b7cff','#a259ff']} },
+      series: [{ type:'heatmap', data, label:{show:false}, emphasis:{itemStyle:{shadowBlur:10,shadowColor:'rgba(0,0,0,.5)'}} }]
+    });
+  }
+}
+
+// ─────────────────────────────────────────────
+// LOAD VENDAS
+// ─────────────────────────────────────────────
+async function loadVendas() {
+  const [kpis, fatDiario, canal, pagamento, mensal, ultimas] = await Promise.all([
+    api('/api/vendas/kpis'),
+    api('/api/geral/faturamento-diario'),
+    api('/api/vendas/por-canal'),
+    api('/api/vendas/por-pagamento'),
+    api('/api/vendas/mensal'),
+    api('/api/vendas/ultimas', {limit:50}),
+  ]);
+
+  document.getElementById('vendas-kpis').innerHTML = [
+    kpiCard('Faturamento', fmt(kpis?.faturamento), `${fmt(kpis?.pedidos,'int')} pedidos`, '#5b7cff'),
+    kpiCard('Ticket Médio', fmt(kpis?.ticket_medio), '', '#a259ff'),
+    kpiCard('Produtos', fmt(kpis?.total_produtos), 'valor dos itens', '#06b6d4'),
+    kpiCard('Total Frete', fmt(kpis?.total_frete), '', '#f59e0b'),
+    kpiCard('Descontos', fmt(kpis?.total_desconto), `${fmt(kpis?.pct_cancelamento,'pct')} cancelamentos`, '#ef4444'),
+  ].join('');
+
+  // Faturamento diário
+  const ch1 = initChart('ch-vendas-fat');
+  if (ch1 && fatDiario?.length) {
+    ch1.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis' },
+      xAxis: { type:'category', data: fatDiario.map(r=>r.data), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      series: [{ type:'line', data: fatDiario.map(r=>r.faturamento), areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(91,124,255,.4)'},{offset:1,color:'rgba(91,124,255,0)'}]}}, lineStyle:{color:'#5b7cff',width:2}, symbol:'none' }]
+    });
+  }
+
+  // Canal — donut
+  const ch2 = initChart('ch-vendas-canal');
+  if (ch2 && canal?.length) {
+    ch2.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'item', formatter:'{b}<br/>Pedidos: {c}' },
+      legend: { orient:'vertical', right:5, textStyle:{color:'#7b80a0',fontSize:11} },
+      series: [{ type:'pie', radius:['40%','70%'], center:['40%','50%'], data: canal.map((r,i)=>({name:r.canal,value:r.pedidos,itemStyle:{color:COLORS[i]}})), label:{color:'#7b80a0',fontSize:11} }]
+    });
+    ch2.on('click', p => setCF('canal', p.name));
+  }
+
+  // Pagamento — barras
+  const ch3 = initChart('ch-vendas-pag');
+  if (ch3 && pagamento?.length) {
+    const sorted = [...pagamento].sort((a,b)=>a.faturamento-b.faturamento);
+    ch3.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p => `${p[0].axisValue}<br/>Faturamento: <b>${fmt(p[0].value)}</b>` },
+      xAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      yAxis: { type:'category', data: sorted.map(r=>r.pagamento?.substring(0,25)), axisLabel:{color:'#7b80a0',fontSize:11} },
+      series: [{ type:'bar', data: sorted.map(r=>r.faturamento), itemStyle:{color:p=>COLORS[p.dataIndex%COLORS.length],borderRadius:[0,4,4,0]} }]
+    });
+  }
+
+  // Mensal — barras
+  const ch4 = initChart('ch-vendas-mensal');
+  if (ch4 && mensal?.length) {
+    ch4.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis' },
+      legend: { data:['Faturamento','Pedidos'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: mensal.map(r=>r.mes), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: [
+        { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+        { type:'value', axisLabel:{color:'#7b80a0'}, splitLine:{show:false} }
+      ],
+      series: [
+        { name:'Faturamento', type:'bar', data: mensal.map(r=>r.faturamento), itemStyle:{color:'#5b7cff',borderRadius:[4,4,0,0]}, yAxisIndex:0 },
+        { name:'Pedidos', type:'line', data: mensal.map(r=>r.pedidos), lineStyle:{color:'#f59e0b',width:2}, symbol:'circle', symbolSize:4, yAxisIndex:1 }
+      ]
+    });
+  }
+
+  // Tabela últimas vendas
+  const statusBadge = s => {
+    const m = {Entregue:'green',Aprovado:'blue','Aguardando pagamento':'yellow',Cancelado:'red',Cancelada:'red'};
+    return `<span class="badge badge-${m[s]||'gray'}">${s||'N/D'}</span>`;
+  };
+  document.getElementById('tbl-vendas-ultimas').innerHTML = ultimas?.length ? `
+    <table>
+      <thead><tr><th>Data</th><th>Nº</th><th>Cliente</th><th>Situação</th><th>Pagamento</th><th>Envio</th><th class="num">Total</th></tr></thead>
+      <tbody>${ultimas.map(r=>`<tr>
+        <td>${r.data||'—'}</td>
+        <td>${r.numero||r.numero_ecommerce||'—'}</td>
+        <td>${(r.nome_cliente||'—').substring(0,30)}</td>
+        <td>${statusBadge(r.situacao)}</td>
+        <td>${(r.pagamento||'—').substring(0,20)}</td>
+        <td>${(r.forma_envio||'—').substring(0,20)}</td>
+        <td class="num">${fmt(r.total_pedido)}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<div class="loading">Sem dados</div>';
+}
+
+// ─────────────────────────────────────────────
+// LOAD CLIENTES
+// ─────────────────────────────────────────────
+async function loadClientes() {
+  const [kpis, novosMensal, uf, freq, top] = await Promise.all([
+    api('/api/clientes/kpis'),
+    api('/api/clientes/novos-mensal'),
+    api('/api/clientes/por-uf'),
+    api('/api/clientes/frequencia'),
+    api('/api/clientes/top', {limit:20}),
+  ]);
+
+  document.getElementById('clientes-kpis').innerHTML = [
+    kpiCard('Total Clientes', fmt(kpis?.total,'int'), '', '#5b7cff'),
+    kpiCard('Novos no Período', fmt(kpis?.novos,'int'), 'novos cadastros', '#2ecc71'),
+    kpiCard('Recorrentes', fmt(kpis?.recorrentes,'int'), '2+ compras no período', '#a259ff'),
+    kpiCard('Inativos 90d', fmt(kpis?.sem_compra_90,'int'), 'sem compra há 90 dias', '#ef4444'),
+  ].join('');
+
+  const ch1 = initChart('ch-cli-novos');
+  if (ch1 && novosMensal?.length) {
+    ch1.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis' },
+      xAxis: { type:'category', data: novosMensal.map(r=>r.mes), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: { type:'value', axisLabel:{color:'#7b80a0'}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      series: [{ type:'bar', data: novosMensal.map(r=>r.novos), itemStyle:{color:'#2ecc71',borderRadius:[4,4,0,0]},
+        markLine:{data:[{type:'average',name:'Média'}],lineStyle:{color:'#f59e0b',type:'dashed'},label:{color:'#f59e0b'}} }]
+    });
+  }
+
+  const ch2 = initChart('ch-cli-freq');
+  if (ch2 && freq?.length) {
+    ch2.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'item', formatter:'{b}: {c} clientes ({d}%)' },
+      series: [{ type:'pie', radius:['40%','70%'],
+        data: freq.map((r,i)=>({name:r.faixa,value:r.clientes,itemStyle:{color:COLORS[i]}})),
+        label:{color:'#7b80a0'}, emphasis:{itemStyle:{shadowBlur:10}} }]
+    });
+  }
+
+  const ch3 = initChart('ch-cli-uf');
+  if (ch3 && uf?.length) {
+    const sorted = [...uf].sort((a,b)=>a.faturamento-b.faturamento).slice(-20);
+    ch3.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`${p[0].axisValue}<br/>Clientes: <b>${p[0].value}</b><br/>Faturamento: <b>${fmt(p[1]?.value)}</b>` },
+      legend: { data:['Clientes','Faturamento'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: [
+        { type:'value', name:'Clientes', axisLabel:{color:'#7b80a0'}, splitLine:{lineStyle:{color:'#2e3248'}} },
+        { type:'value', name:'R$', axisLabel:{color:'#7b80a0'}, splitLine:{show:false} }
+      ],
+      yAxis: { type:'category', data: sorted.map(r=>r.uf), axisLabel:{color:'#7b80a0'} },
+      series: [
+        { name:'Clientes', type:'bar', data: sorted.map(r=>r.clientes), itemStyle:{color:'#5b7cff',borderRadius:[0,4,4,0]}, xAxisIndex:0 },
+        { name:'Faturamento', type:'bar', data: sorted.map(r=>r.faturamento), itemStyle:{color:'#a259ff',borderRadius:[0,4,4,0]}, xAxisIndex:1 }
+      ]
+    });
+    ch3.on('click', p => setCF('uf', p.name));
+  }
+
+  document.getElementById('tbl-clientes-top').innerHTML = top?.length ? `
+    <table>
+      <thead><tr><th>Cliente</th><th class="num">Pedidos</th><th class="num">Faturamento</th><th class="num">Ticket Médio</th><th>Última Compra</th></tr></thead>
+      <tbody>${top.map((r,i)=>`<tr>
+        <td>${(r.nome_cliente||'—').substring(0,35)}</td>
+        <td class="num">${fmt(r.pedidos,'int')}</td>
+        <td class="num">${fmt(r.faturamento)}</td>
+        <td class="num">${fmt(r.ticket_medio)}</td>
+        <td>${r.ultima_compra||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<div class="loading">Sem dados</div>';
+}
+
+// ─────────────────────────────────────────────
+// LOAD PRODUTOS
+// ─────────────────────────────────────────────
+async function loadProdutos() {
+  const [kpis, top, abc] = await Promise.all([
+    api('/api/produtos/kpis'),
+    api('/api/produtos/top', {limit:20}),
+    api('/api/produtos/curva-abc'),
+  ]);
+
+  document.getElementById('produtos-kpis').innerHTML = [
+    kpiCard('Unidades Vendidas', fmt(kpis?.unidades_vendidas,'int'), '', '#5b7cff'),
+    kpiCard('SKUs Distintos', fmt(kpis?.skus_vendidos,'int'), 'produtos diferentes', '#a259ff'),
+    kpiCard('Receita Total', fmt(kpis?.receita_total), '', '#2ecc71'),
+    kpiCard('Preço Médio', fmt(kpis?.preco_medio), 'por unidade vendida', '#f59e0b'),
+  ].join('');
+
+  const ch1 = initChart('ch-prod-top');
+  if (ch1 && top?.length) {
+    const sorted = [...top].sort((a,b)=>a.receita-b.receita);
+    ch1.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`${p[0].axisValue}<br/>Receita: <b>${fmt(p[0].value)}</b><br/>Qtd: <b>${fmt(p[1]?.value,'int')}</b>` },
+      legend: { data:['Receita','Qtd'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: [
+        { type:'value', name:'R$', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+        { type:'value', name:'Qtd', axisLabel:{color:'#7b80a0'}, splitLine:{show:false} }
+      ],
+      yAxis: { type:'category', data: sorted.map(r=>r.descricao?.substring(0,35)), axisLabel:{color:'#7b80a0',fontSize:11} },
+      series: [
+        { name:'Receita', type:'bar', data: sorted.map(r=>r.receita), itemStyle:{color:p=>COLORS[p.dataIndex%COLORS.length],borderRadius:[0,4,4,0]}, xAxisIndex:0 },
+        { name:'Qtd', type:'scatter', data: sorted.map(r=>r.qtd), symbolSize:6, itemStyle:{color:'#f59e0b'}, xAxisIndex:1 }
+      ]
+    });
+    ch1.on('click', p => setCF('produto', p.name));
+  }
+
+  // Curva ABC
+  const ch2 = initChart('ch-prod-abc');
+  if (ch2 && abc?.length) {
+    const curvaColors = {A:'#2ecc71', B:'#f59e0b', C:'#ef4444'};
+    ch2.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`${p[0].axisValue}<br/>Receita: <b>${fmt(p[0].value)}</b><br/>Acumulado: <b>${p[1]?.value}%</b>` },
+      legend: { data:['Receita','% Acumulado'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: abc.map(r=>r.rank), axisLabel:{color:'#7b80a0',interval:Math.floor(abc.length/8)} },
+      yAxis: [
+        { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+        { type:'value', max:100, axisLabel:{color:'#7b80a0',formatter:v=>v+'%'}, splitLine:{show:false} }
+      ],
+      series: [
+        { name:'Receita', type:'bar', data: abc.map(r=>({value:r.receita,itemStyle:{color:curvaColors[r.curva]}})), yAxisIndex:0 },
+        { name:'% Acumulado', type:'line', data: abc.map(r=>r.acumulado_pct), lineStyle:{color:'#06b6d4',width:2}, symbol:'none', yAxisIndex:1,
+          markLine:{data:[{yAxis:80,name:'80%'},{yAxis:95,name:'95%'}],lineStyle:{type:'dashed',color:'#7b80a0'},label:{color:'#7b80a0',formatter:'{b}'}} }
+      ]
+    });
+  }
+}
+
+// ─────────────────────────────────────────────
+// LOAD ESTOQUE
+// ─────────────────────────────────────────────
+async function loadEstoque() {
+  const [kpis, topCusto, abc, encalhados] = await Promise.all([
+    api('/api/estoque/kpis'),
+    api('/api/estoque/top-custo', {limit:20}),
+    api('/api/estoque/curva-abc'),
+    api('/api/estoque/encalhados', {dias:60, limit:30}),
+  ]);
+
+  document.getElementById('estoque-kpis').innerHTML = [
+    kpiCard('Valor Venda (estoque)', fmt(kpis?.valor_venda_estoque), 'preço de venda × qtd', '#5b7cff'),
+    kpiCard('Valor Custo (estoque)', fmt(kpis?.valor_custo_estoque), 'custo × qtd', '#a259ff'),
+    kpiCard('Com Estoque', fmt(kpis?.produtos_com_estoque,'int'), 'produtos ativos c/ estoque', '#2ecc71'),
+    kpiCard('Zerados', fmt(kpis?.produtos_zerados,'int'), 'sem estoque', '#ef4444'),
+    kpiCard('Críticos (≤5)', fmt(kpis?.criticos,'int'), 'estoque baixo', '#f59e0b'),
+  ].join('');
+
+  const ch1 = initChart('ch-est-top');
+  if (ch1 && topCusto?.length) {
+    const sorted = [...topCusto].sort((a,b)=>a.custo_total-b.custo_total);
+    ch1.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`${p[0].axisValue}<br/>Custo total: <b>${fmt(p[0].value)}</b><br/>Estoque: ${sorted[p[0].dataIndex]?.estoque_atual} un` },
+      xAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      yAxis: { type:'category', data: sorted.map(r=>r.nome?.substring(0,35)), axisLabel:{color:'#7b80a0',fontSize:11} },
+      series: [{ type:'bar', data: sorted.map(r=>r.custo_total), itemStyle:{color:p=>COLORS[p.dataIndex%COLORS.length],borderRadius:[0,4,4,0]},
+        label:{show:true,position:'right',color:'#7b80a0',fontSize:10,formatter:p=>p.value>=1000?'R$'+(p.value/1000).toFixed(1)+'k':'R$'+p.value.toFixed(0)} }]
+    });
+  }
+
+  const ch2 = initChart('ch-est-abc');
+  if (ch2 && abc?.length) {
+    const curvaColors = {A:'#2ecc71',B:'#f59e0b',C:'#ef4444'};
+    ch2.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`Rank ${p[0].axisValue}<br/>${p[0].seriesName}: <b>${fmt(p[0].value)}</b>` },
+      legend: { data:['Custo','% Acumulado'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: abc.map(r=>r.rank), axisLabel:{color:'#7b80a0',interval:Math.floor(abc.length/8)} },
+      yAxis: [
+        { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+        { type:'value', max:100, axisLabel:{color:'#7b80a0',formatter:v=>v+'%'}, splitLine:{show:false} }
+      ],
+      series: [
+        { name:'Custo', type:'bar', data: abc.map(r=>({value:r.custo_total,itemStyle:{color:curvaColors[r.curva]}})), yAxisIndex:0 },
+        { name:'% Acumulado', type:'line', data: abc.map(r=>r.acumulado_pct), lineStyle:{color:'#06b6d4',width:2}, symbol:'none', yAxisIndex:1,
+          markLine:{data:[{yAxis:80},{yAxis:95}],lineStyle:{type:'dashed',color:'#7b80a0'}} }
+      ]
+    });
+  }
+
+  document.getElementById('tbl-encalhados').innerHTML = encalhados?.length ? `
+    <table>
+      <thead><tr><th>Produto</th><th>Código</th><th class="num">Estoque</th><th class="num">Custo Unit.</th><th class="num">Custo Parado</th><th>Última Venda</th><th class="num">Dias</th></tr></thead>
+      <tbody>${encalhados.map(r=>`<tr>
+        <td>${(r.nome||'—').substring(0,40)}</td>
+        <td>${r.codigo||'—'}</td>
+        <td class="num">${r.estoque_atual||0}</td>
+        <td class="num">${fmt(r.preco_custo)}</td>
+        <td class="num">${fmt(r.custo_parado)}</td>
+        <td>${r.ultima_venda||'Nunca vendido'}</td>
+        <td class="num"><span class="badge ${(r.dias_sem_venda||999)>120?'badge-red':(r.dias_sem_venda||999)>60?'badge-yellow':'badge-gray'}">${r.dias_sem_venda||'∞'}</span></td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<div class="loading">Sem dados</div>';
+}
+
+// ─────────────────────────────────────────────
+// LOAD FRETE
+// ─────────────────────────────────────────────
+async function loadFrete() {
+  const [kpis, envio, uf, statusRastreio, rastreios] = await Promise.all([
+    api('/api/frete/kpis'),
+    api('/api/frete/por-envio'),
+    api('/api/frete/por-uf'),
+    api('/api/frete/status-rastreio'),
+    api('/api/frete/rastreios'),
+  ]);
+
+  document.getElementById('frete-kpis').innerHTML = [
+    kpiCard('Frete Médio', fmt(kpis?.frete_medio), 'por pedido com frete', '#5b7cff'),
+    kpiCard('Total Frete', fmt(kpis?.total_frete), 'arrecadado', '#a259ff'),
+    kpiCard('Frete Grátis', fmt(kpis?.frete_gratis,'int'), `${fmt(kpis?.pct_frete_gratis,'pct')} dos pedidos`, '#2ecc71'),
+    kpiCard('Pedidos', fmt(kpis?.pedidos,'int'), 'no período', '#06b6d4'),
+    kpiCard('Em Trânsito', fmt(rastreios?.length,'int'), 'rastreios ativos', '#f59e0b'),
+  ].join('');
+
+  const ch1 = initChart('ch-frete-envio');
+  if (ch1 && envio?.length) {
+    ch1.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'item', formatter:'{b}: {c} pedidos ({d}%)' },
+      legend: { orient:'vertical', right:5, textStyle:{color:'#7b80a0',fontSize:10} },
+      series: [{ type:'pie', radius:['40%','70%'], center:['40%','50%'],
+        data: envio.slice(0,8).map((r,i)=>({name:r.forma_envio?.substring(0,30),value:r.pedidos,itemStyle:{color:COLORS[i]}})),
+        label:{color:'#7b80a0',fontSize:10} }]
+    });
+    ch1.on('click', p => setCF('forma_envio', p.name));
+  }
+
+  const ch2 = initChart('ch-frete-uf');
+  if (ch2 && uf?.length) {
+    const sorted = [...uf].sort((a,b)=>a.frete_medio-b.frete_medio).slice(-20);
+    ch2.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`${p[0].axisValue}<br/>Frete médio: <b>${fmt(p[0].value)}</b>` },
+      xAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=100?'R$'+(v/100).toFixed(0)*100:'R$'+v.toFixed(0)}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      yAxis: { type:'category', data: sorted.map(r=>r.uf), axisLabel:{color:'#7b80a0'} },
+      series: [{ type:'bar', data: sorted.map(r=>+Number(r.frete_medio).toFixed(2)), itemStyle:{color:p=>COLORS[p.dataIndex%COLORS.length],borderRadius:[0,4,4,0]},
+        label:{show:true,position:'right',color:'#7b80a0',fontSize:10,formatter:p=>'R$'+Number(p.value).toFixed(0)} }]
+    });
+    ch2.on('click', p => setCF('uf', p.name));
+  }
+
+  const ch3 = initChart('ch-frete-status');
+  if (ch3 && statusRastreio?.length) {
+    const stColors = {'Entregue':'#2ecc71','Saiu p/ entrega':'#5b7cff','Em trânsito':'#f59e0b','Postado':'#06b6d4','Outros':'#7b80a0'};
+    ch3.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'item', formatter:'{b}: {c} ({d}%)' },
+      series: [{ type:'pie', radius:['40%','70%'],
+        data: statusRastreio.map(r=>({name:r.status,value:r.total,itemStyle:{color:stColors[r.status]||'#7b80a0'}})),
+        label:{color:'#7b80a0'} }]
+    });
+  }
+
+  document.getElementById('tbl-rastreios').innerHTML = rastreios?.length ? `
+    <table>
+      <thead><tr><th>Código</th><th>Cliente</th><th>UF</th><th>Frete</th><th>Status</th><th>Previsão</th><th>Verificado</th></tr></thead>
+      <tbody>${rastreios.map(r=>`<tr>
+        <td><code style="color:var(--accent)">${r.codigo_rastreio||'—'}</code></td>
+        <td>${(r.nome_cliente||'—').substring(0,25)}</td>
+        <td>${r.uf_cliente||'—'}</td>
+        <td>${(r.forma_frete||'—').substring(0,25)}</td>
+        <td><span style="font-size:11px;color:var(--text-muted)">${(r.status_atual||'—').substring(0,40)}</span></td>
+        <td>${r.dt_prevista?.split('T')[0]||'—'}</td>
+        <td>${r.ultima_verificacao?.split('T')[0]||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<div class="loading">Nenhum rastreio ativo</div>';
+}
+
+// ─────────────────────────────────────────────
+// LOAD FINANCEIRO
+// ─────────────────────────────────────────────
+async function loadFinanceiro() {
+  const [kpis, receitaDiaria, guruMensal, assinaturas, contasPagar] = await Promise.all([
+    api('/api/financeiro/kpis'),
+    api('/api/financeiro/receita-diaria'),
+    api('/api/financeiro/guru-mensal'),
+    api('/api/financeiro/assinaturas-mensal'),
+    api('/api/financeiro/contas-pagar'),
+  ]);
+
+  document.getElementById('fin-kpis').innerHTML = [
+    kpiCard('Receita Bruta', fmt(kpis?.receita_bruta), '', '#5b7cff'),
+    kpiCard('Descontos', fmt(kpis?.descontos), '', '#ef4444'),
+    kpiCard('Receita Líquida', fmt(kpis?.receita_liquida), 'bruta − descontos', '#2ecc71'),
+    kpiCard('A Pagar no Período', fmt(kpis?.a_pagar_periodo), `${fmt(kpis?.vencidas)} vencidas`, '#f59e0b'),
+    kpiCard('MRR Guru', fmt(kpis?.mrr), `${fmt(kpis?.assinantes,'int')} assinantes`, '#a259ff'),
+  ].join('');
+
+  const ch1 = initChart('ch-fin-receita');
+  if (ch1 && receitaDiaria?.length) {
+    ch1.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`${p[0].axisValue}<br/>Receita: <b>${fmt(p[0].value)}</b><br/>Desconto: <b>${fmt(p[1]?.value)}</b>` },
+      legend: { data:['Receita','Desconto'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: receitaDiaria.map(r=>r.data), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      series: [
+        { name:'Receita', type:'bar', stack:'total', data: receitaDiaria.map(r=>r.receita), itemStyle:{color:'#5b7cff',borderRadius:[0,0,0,0]} },
+        { name:'Desconto', type:'bar', stack:'offset', data: receitaDiaria.map(r=>-r.desconto), itemStyle:{color:'rgba(239,68,68,.5)'} }
+      ]
+    });
+  }
+
+  const ch2 = initChart('ch-fin-guru');
+  if (ch2 && guruMensal?.length) {
+    ch2.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`${p[0].axisValue}<br/>Receita: <b>${fmt(p[0].value)}</b>` },
+      xAxis: { type:'category', data: guruMensal.map(r=>r.mes?.toString()?.slice(0,7)), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      series: [{ type:'line', data: guruMensal.map(r=>r.receita), areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(162,89,255,.4)'},{offset:1,color:'rgba(162,89,255,0)'}]}}, lineStyle:{color:'#a259ff',width:2}, symbol:'circle', symbolSize:4 }]
+    });
+  }
+
+  const ch3 = initChart('ch-fin-assin');
+  if (ch3 && assinaturas?.length) {
+    ch3.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis' },
+      legend: { data:['Novos','Cancelados'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: assinaturas.map(r=>r.mes?.toString()?.slice(0,7)), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: { type:'value', axisLabel:{color:'#7b80a0'}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      series: [
+        { name:'Novos', type:'bar', data: assinaturas.map(r=>r.novos||0), itemStyle:{color:'#2ecc71',borderRadius:[4,4,0,0]} },
+        { name:'Cancelados', type:'bar', data: assinaturas.map(r=>r.cancelados||0), itemStyle:{color:'#ef4444',borderRadius:[4,4,0,0]} }
+      ]
+    });
+  }
+
+  const ch4 = initChart('ch-fin-contas');
+  if (ch4 && contasPagar?.length) {
+    const sorted = [...contasPagar].sort((a,b)=>a.total-b.total);
+    ch4.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p=>`${p[0].axisValue}<br/>Total: <b>${fmt(p[0].value)}</b>` },
+      xAxis: { type:'value', axisLabel:{color:'#7b80a0',formatter:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      yAxis: { type:'category', data: sorted.map(r=>r.categoria?.substring(0,25)), axisLabel:{color:'#7b80a0',fontSize:11} },
+      series: [{ type:'bar', data: sorted.map(r=>r.total), itemStyle:{color:p=>COLORS[p.dataIndex%COLORS.length],borderRadius:[0,4,4,0]} }]
+    });
+  }
+}
+
+// ─────────────────────────────────────────────
+// LOAD CONTROLLER
+// ─────────────────────────────────────────────
+async function loadTab(tab) {
+  switch(tab) {
+    case 'geral':      await loadGeral();      break;
+    case 'vendas':     await loadVendas();     break;
+    case 'clientes':   await loadClientes();   break;
+    case 'produtos':   await loadProdutos();   break;
+    case 'estoque':    await loadEstoque();    break;
+    case 'frete':      await loadFrete();      break;
+    case 'financeiro': await loadFinanceiro(); break;
+  }
+  setTimeout(resizeAll, 150);
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+applyPreset('mes');
+loadTab('geral');
+</script>
+</body>
+</html>
