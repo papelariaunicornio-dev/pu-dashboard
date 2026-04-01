@@ -655,30 +655,3 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
 
-@app.get("/api/debug/vendas-sample")
-def debug_vendas():
-    return q("SELECT id_tiny, data_pedido, situacao, total_pedido FROM tiny_vendas ORDER BY id_tiny DESC LIMIT 5")
-
-@app.get("/api/debug/situacao-test")
-def debug_situacao_test(ini: str = "2026-01-01", fim: str = "2026-12-31"):
-    return {
-        "raw_text": q("SELECT situacao, COUNT(*) as n FROM tiny_vendas WHERE data_pedido BETWEEN %s AND %s GROUP BY 1", (ini, fim)),
-        "dc_func": q(f"SELECT situacao, COUNT(*) as n FROM tiny_vendas WHERE {dc('data_pedido')} BETWEEN %s AND %s GROUP BY 1", (ini, fim)),
-        "dc_explicit_date": scalar(f"SELECT COUNT(*) FROM tiny_vendas WHERE {dc('data_pedido')} BETWEEN %s::date AND %s::date", (ini, fim)),
-    }
-
-@app.get("/api/debug/count")
-def debug_count():
-    return {
-        "tiny_vendas": scalar("SELECT COUNT(*) FROM tiny_vendas"),
-        "tiny_vendas_itens": scalar("SELECT COUNT(*) FROM tiny_vendas_itens"),
-        "tiny_clientes": scalar("SELECT COUNT(*) FROM tiny_clientes"),
-        "tiny_produtos": scalar("SELECT COUNT(*) FROM tiny_produtos"),
-        "sample_data_pedido": scalar("SELECT data_pedido FROM tiny_vendas ORDER BY id_tiny DESC LIMIT 1"),
-        "data_pedido_type": scalar("SELECT pg_typeof(data_pedido)::text FROM tiny_vendas LIMIT 1"),
-        "test_filter": scalar("SELECT COUNT(*) FROM tiny_vendas WHERE data_pedido BETWEEN '2026-01-01' AND '2026-12-31'"),
-        "test_filter_text": scalar("SELECT COUNT(*) FROM tiny_vendas WHERE data_pedido::text BETWEEN '2026-01-01' AND '2026-12-31'"),
-        "test_dc": scalar(f"SELECT COUNT(*) FROM tiny_vendas WHERE {dc('data_pedido')} BETWEEN '2026-01-01'::date AND '2026-12-31'::date"),
-        "test_dc_null": scalar(f"SELECT COUNT(*) FROM tiny_vendas WHERE {dc('data_pedido')} IS NULL"),
-        "test_regex": scalar("SELECT COUNT(*) FROM tiny_vendas WHERE data_pedido ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'"),
-    }
