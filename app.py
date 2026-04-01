@@ -667,4 +667,7 @@ def debug_count():
         "tiny_clientes": scalar("SELECT COUNT(*) FROM tiny_clientes"),
         "tiny_produtos": scalar("SELECT COUNT(*) FROM tiny_produtos"),
         "sample_data_pedido": scalar("SELECT data_pedido FROM tiny_vendas ORDER BY id_tiny DESC LIMIT 1"),
+        "data_pedido_type": scalar("SELECT pg_typeof(data_pedido)::text FROM tiny_vendas LIMIT 1"),
+        "test_filter": scalar("SELECT COUNT(*) FROM tiny_vendas WHERE data_pedido BETWEEN '2026-01-01' AND '2026-12-31'"),
+        "test_filter_text": scalar("SELECT COUNT(*) FROM tiny_vendas WHERE data_pedido::text BETWEEN '2026-01-01' AND '2026-12-31'"),
     }
