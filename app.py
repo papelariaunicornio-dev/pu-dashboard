@@ -659,6 +659,14 @@ if __name__ == "__main__":
 def debug_vendas():
     return q("SELECT id_tiny, data_pedido, situacao, total_pedido FROM tiny_vendas ORDER BY id_tiny DESC LIMIT 5")
 
+@app.get("/api/debug/situacao-test")
+def debug_situacao_test(ini: str = "2026-01-01", fim: str = "2026-12-31"):
+    return {
+        "raw_text": q("SELECT situacao, COUNT(*) as n FROM tiny_vendas WHERE data_pedido BETWEEN %s AND %s GROUP BY 1", (ini, fim)),
+        "dc_func": q(f"SELECT situacao, COUNT(*) as n FROM tiny_vendas WHERE {dc('data_pedido')} BETWEEN %s AND %s GROUP BY 1", (ini, fim)),
+        "dc_explicit_date": scalar(f"SELECT COUNT(*) FROM tiny_vendas WHERE {dc('data_pedido')} BETWEEN %s::date AND %s::date", (ini, fim)),
+    }
+
 @app.get("/api/debug/count")
 def debug_count():
     return {
