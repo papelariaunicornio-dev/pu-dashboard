@@ -670,4 +670,7 @@ def debug_count():
         "data_pedido_type": scalar("SELECT pg_typeof(data_pedido)::text FROM tiny_vendas LIMIT 1"),
         "test_filter": scalar("SELECT COUNT(*) FROM tiny_vendas WHERE data_pedido BETWEEN '2026-01-01' AND '2026-12-31'"),
         "test_filter_text": scalar("SELECT COUNT(*) FROM tiny_vendas WHERE data_pedido::text BETWEEN '2026-01-01' AND '2026-12-31'"),
+        "test_dc": scalar(f"SELECT COUNT(*) FROM tiny_vendas WHERE {dc('data_pedido')} BETWEEN '2026-01-01'::date AND '2026-12-31'::date"),
+        "test_dc_null": scalar(f"SELECT COUNT(*) FROM tiny_vendas WHERE {dc('data_pedido')} IS NULL"),
+        "test_regex": scalar("SELECT COUNT(*) FROM tiny_vendas WHERE data_pedido ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'"),
     }
