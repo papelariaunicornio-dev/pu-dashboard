@@ -96,7 +96,7 @@ def geral_kpis(data_ini: Optional[str] = None, data_fim: Optional[str] = None):
         WHERE {dc('data_criacao')} BETWEEN %s AND %s
     """, (data_ini, data_fim)) or 0
 
-    assinantes = scalar("SELECT COUNT(*) FROM guru_assinaturas WHERE status = 'active'") or 0
+    assinantes = scalar("SELECT COUNT(*) FROM guru_assinaturas WHERE last_status = 'active'") or 0
 
     return {**vendas, "novos_clientes": novos_clientes, "assinantes_ativos": assinantes}
 
@@ -419,7 +419,7 @@ def estoque_kpis():
             COUNT(*) FILTER (WHERE estoque_atual > 0) AS produtos_com_estoque,
             COUNT(*) FILTER (WHERE estoque_atual = 0 OR estoque_atual IS NULL) AS produtos_zerados,
             COUNT(*) FILTER (WHERE estoque_atual > 0 AND estoque_atual <= 5) AS criticos,
-            COALESCE(SUM(estoque_atual * preco_venda) FILTER (WHERE estoque_atual > 0), 0) AS valor_venda_estoque,
+            COALESCE(SUM(estoque_atual * preco) FILTER (WHERE estoque_atual > 0), 0) AS valor_venda_estoque,
             COALESCE(SUM(estoque_atual * preco_custo) FILTER (WHERE estoque_atual > 0 AND preco_custo > 0), 0) AS valor_custo_estoque
         FROM tiny_produtos
         WHERE situacao = 'Ativo'
@@ -432,9 +432,9 @@ def estoque_top_custo(limit: int = 20):
             nome, codigo,
             estoque_atual,
             preco_custo,
-            preco_venda,
+            preco,
             COALESCE(estoque_atual * preco_custo, 0) AS custo_total,
-            COALESCE(estoque_atual * preco_venda, 0) AS valor_venda
+            COALESCE(estoque_atual * preco, 0) AS valor_venda
         FROM tiny_produtos
         WHERE situacao = 'Ativo' AND estoque_atual > 0 AND preco_custo > 0
         ORDER BY custo_total DESC LIMIT %s
@@ -596,8 +596,8 @@ def financeiro_kpis(data_ini: Optional[str] = None, data_fim: Optional[str] = No
         FROM tiny_contas_pagar_pu
     """, (data_ini, data_fim))[0]
 
-    assinantes = scalar("SELECT COUNT(*) FROM guru_assinaturas WHERE status = 'active'") or 0
-    mrr = scalar("SELECT COALESCE(SUM(valor_liquido),0) FROM guru_vendas WHERE confirmed_at::date >= DATE_TRUNC('month', CURRENT_DATE)") or 0
+    assinantes = scalar("SELECT COUNT(*) FROM guru_assinaturas WHERE last_status = 'active'") or 0
+    mrr = scalar(f"SELECT COALESCE(SUM(valor_liquido),0) FROM guru_vendas WHERE {dc('confirmed_at')} >= DATE_TRUNC('month', CURRENT_DATE)::date") or 0
 
     return {**vendas, **contas, "assinantes": assinantes, "mrr": mrr}
 
@@ -620,9 +620,9 @@ def financeiro_guru():
         SELECT
             DATE_TRUNC('month', confirmed_at::timestamp)::date AS mes,
             COUNT(*) AS vendas,
-            SUM(valor_liquido) AS receita
+            COALESCE(SUM(valor_liquido),0) AS receita
         FROM guru_vendas
-        WHERE confirmed_at IS NOT NULL AND confirmed_at != ''
+        WHERE confirmed_at IS NOT NULL AND confirmed_at::text != ''
         GROUP BY 1 ORDER BY 1
     """)
 
@@ -631,10 +631,10 @@ def financeiro_assinaturas():
     return q(f"""
         SELECT
             DATE_TRUNC('month', started_at::timestamp)::date AS mes,
-            COUNT(*) FILTER (WHERE status = 'active') AS novos,
-            COUNT(*) FILTER (WHERE status = 'canceled') AS cancelados
+            COUNT(*) FILTER (WHERE last_status = 'active') AS novos,
+            COUNT(*) FILTER (WHERE last_status = 'canceled') AS cancelados
         FROM guru_assinaturas
-        WHERE started_at IS NOT NULL AND started_at != ''
+        WHERE started_at IS NOT NULL AND started_at::text != ''
         GROUP BY 1 ORDER BY 1
     """)
 
