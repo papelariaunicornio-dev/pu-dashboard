@@ -654,3 +654,17 @@ def financeiro_contas(data_ini: Optional[str] = None, data_fim: Optional[str] = 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+
+@app.get("/api/debug/vendas-sample")
+def debug_vendas():
+    return q("SELECT id_tiny, data_pedido, situacao, total_pedido FROM tiny_vendas ORDER BY id_tiny DESC LIMIT 5")
+
+@app.get("/api/debug/count")
+def debug_count():
+    return {
+        "tiny_vendas": scalar("SELECT COUNT(*) FROM tiny_vendas"),
+        "tiny_vendas_itens": scalar("SELECT COUNT(*) FROM tiny_vendas_itens"),
+        "tiny_clientes": scalar("SELECT COUNT(*) FROM tiny_clientes"),
+        "tiny_produtos": scalar("SELECT COUNT(*) FROM tiny_produtos"),
+        "sample_data_pedido": scalar("SELECT data_pedido FROM tiny_vendas ORDER BY id_tiny DESC LIMIT 1"),
+    }
