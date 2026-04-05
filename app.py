@@ -832,6 +832,93 @@ def seo_queries_mensal():
     """)
 
 
+@app.post("/api/seo/sync")
+def seo_sync(days: int = 7, secret: Optional[str] = None):
+    """Run GSC sync from within the container. Requires SYNC_SECRET env var match."""
+    expected = os.getenv("SYNC_SECRET", "pu-seo-sync-2024")
+    if secret != expected:
+        return {"error": "unauthorized"}
+
+    import json as _json
+    creds_json = os.getenv("GSC_CREDENTIALS_JSON")
+    if not creds_json:
+        return {"error": "GSC_CREDENTIALS_JSON not set"}
+
+    try:
+        from google.oauth2 import service_account as sa
+        from googleapiclient.discovery import build as gbuild
+        from psycopg2.extras import execute_values
+
+        site_url = os.getenv("GSC_SITE_URL", "https://www.papelariaunicornio.com.br")
+        scopes = ["https://www.googleapis.com/auth/webmasters.readonly"]
+        info = _json.loads(creds_json)
+        credentials = sa.Credentials.from_service_account_info(info, scopes=scopes)
+        service = gbuild("searchconsole", "v1", credentials=credentials)
+
+        end_date = (date.today() - timedelta(days=1)).isoformat()
+        start_date = (date.today() - timedelta(days=days)).isoformat()
+
+        def fetch_gsc(dims, row_limit=25000):
+            all_rows, start_row = [], 0
+            while True:
+                resp = service.searchanalytics().query(siteUrl=site_url, body={
+                    "startDate": start_date, "endDate": end_date,
+                    "dimensions": dims, "rowLimit": row_limit, "startRow": start_row,
+                }).execute()
+                rows = resp.get("rows", [])
+                if not rows:
+                    break
+                all_rows.extend(rows)
+                start_row += len(rows)
+                if len(rows) < row_limit:
+                    break
+            return all_rows
+
+        with db() as conn:
+            # Queries
+            rows = fetch_gsc(["date", "query", "page", "country", "device"])
+            if rows:
+                vals = [(r["keys"][0], r["keys"][1], r["keys"][2], r["keys"][3], r["keys"][4],
+                         r["clicks"], r["impressions"], round(r["ctr"], 4), round(r["position"], 2))
+                        for r in rows]
+                with conn.cursor() as cur:
+                    execute_values(cur, """
+                        INSERT INTO gsc_queries (data, query, page, country, device, clicks, impressions, ctr, position, synced_at)
+                        VALUES %s
+                        ON CONFLICT (data, query, page, country, device)
+                        DO UPDATE SET clicks=EXCLUDED.clicks, impressions=EXCLUDED.impressions,
+                                      ctr=EXCLUDED.ctr, position=EXCLUDED.position, synced_at=NOW()
+                    """, vals, page_size=500)
+                conn.commit()
+                total_q = len(vals)
+            else:
+                total_q = 0
+
+            # Pages
+            rows = fetch_gsc(["date", "page"])
+            if rows:
+                vals = [(r["keys"][0], r["keys"][1],
+                         r["clicks"], r["impressions"], round(r["ctr"], 4), round(r["position"], 2))
+                        for r in rows]
+                with conn.cursor() as cur:
+                    execute_values(cur, """
+                        INSERT INTO gsc_pages (data, page, clicks, impressions, ctr, position, synced_at)
+                        VALUES %s
+                        ON CONFLICT (data, page)
+                        DO UPDATE SET clicks=EXCLUDED.clicks, impressions=EXCLUDED.impressions,
+                                      ctr=EXCLUDED.ctr, position=EXCLUDED.position, synced_at=NOW()
+                    """, vals, page_size=500)
+                conn.commit()
+                total_p = len(vals)
+            else:
+                total_p = 0
+
+        return {"ok": True, "period": f"{start_date} → {end_date}", "queries": total_q, "pages": total_p}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
