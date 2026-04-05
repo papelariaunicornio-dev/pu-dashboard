@@ -651,6 +651,187 @@ def financeiro_contas(data_ini: Optional[str] = None, data_fim: Optional[str] = 
         GROUP BY 1 ORDER BY 2 DESC LIMIT 15
     """, (data_ini, data_fim))
 
+# ─────────────────────────────────────────────
+# SEO — Google Search Console
+# ─────────────────────────────────────────────
+def ensure_gsc_tables():
+    """Create GSC tables if they don't exist."""
+    with db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS gsc_queries (
+                    id SERIAL PRIMARY KEY,
+                    data DATE NOT NULL,
+                    query TEXT NOT NULL,
+                    page TEXT,
+                    country TEXT DEFAULT 'BRA',
+                    device TEXT DEFAULT 'DESKTOP',
+                    clicks INT DEFAULT 0,
+                    impressions INT DEFAULT 0,
+                    ctr NUMERIC(6,4) DEFAULT 0,
+                    position NUMERIC(6,2) DEFAULT 0,
+                    synced_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(data, query, page, country, device)
+                );
+                CREATE TABLE IF NOT EXISTS gsc_pages (
+                    id SERIAL PRIMARY KEY,
+                    data DATE NOT NULL,
+                    page TEXT NOT NULL,
+                    clicks INT DEFAULT 0,
+                    impressions INT DEFAULT 0,
+                    ctr NUMERIC(6,4) DEFAULT 0,
+                    position NUMERIC(6,2) DEFAULT 0,
+                    synced_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(data, page)
+                );
+                CREATE INDEX IF NOT EXISTS idx_gsc_queries_data ON gsc_queries(data);
+                CREATE INDEX IF NOT EXISTS idx_gsc_queries_query ON gsc_queries(query);
+                CREATE INDEX IF NOT EXISTS idx_gsc_pages_data ON gsc_pages(data);
+                CREATE INDEX IF NOT EXISTS idx_gsc_pages_page ON gsc_pages(page);
+            """)
+            conn.commit()
+
+@app.on_event("startup")
+async def startup():
+    ensure_gsc_tables()
+
+
+@app.get("/api/seo/kpis")
+def seo_kpis(data_ini: Optional[str] = None, data_fim: Optional[str] = None):
+    data_ini, data_fim = defaults(data_ini, data_fim)
+    current = q("""
+        SELECT
+            COALESCE(SUM(clicks), 0) AS clicks,
+            COALESCE(SUM(impressions), 0) AS impressions,
+            CASE WHEN SUM(impressions) > 0
+                THEN ROUND(100.0 * SUM(clicks)::numeric / SUM(impressions), 2)
+                ELSE 0 END AS ctr,
+            CASE WHEN SUM(impressions) > 0
+                THEN ROUND(SUM(position * impressions)::numeric / SUM(impressions), 1)
+                ELSE 0 END AS avg_position,
+            COUNT(DISTINCT query) AS total_queries,
+            COUNT(DISTINCT page) AS total_pages
+        FROM gsc_queries
+        WHERE data BETWEEN %s AND %s
+    """, (data_ini, data_fim))
+    if not current:
+        return {"clicks": 0, "impressions": 0, "ctr": 0, "avg_position": 0,
+                "total_queries": 0, "total_pages": 0,
+                "clicks_prev": 0, "impressions_prev": 0}
+
+    # Previous period for comparison
+    days = (date.fromisoformat(data_fim) - date.fromisoformat(data_ini)).days + 1
+    prev_fim = (date.fromisoformat(data_ini) - timedelta(days=1)).isoformat()
+    prev_ini = (date.fromisoformat(data_ini) - timedelta(days=days)).isoformat()
+    prev = q("""
+        SELECT
+            COALESCE(SUM(clicks), 0) AS clicks_prev,
+            COALESCE(SUM(impressions), 0) AS impressions_prev
+        FROM gsc_queries
+        WHERE data BETWEEN %s AND %s
+    """, (prev_ini, prev_fim))
+
+    return {**current[0], **(prev[0] if prev else {"clicks_prev": 0, "impressions_prev": 0})}
+
+
+@app.get("/api/seo/clicks-diario")
+def seo_clicks_diario(data_ini: Optional[str] = None, data_fim: Optional[str] = None):
+    data_ini, data_fim = defaults(data_ini, data_fim)
+    return q("""
+        SELECT
+            data,
+            SUM(clicks) AS clicks,
+            SUM(impressions) AS impressions
+        FROM gsc_queries
+        WHERE data BETWEEN %s AND %s
+        GROUP BY 1 ORDER BY 1
+    """, (data_ini, data_fim))
+
+
+@app.get("/api/seo/top-queries")
+def seo_top_queries(data_ini: Optional[str] = None, data_fim: Optional[str] = None, limit: int = 30):
+    data_ini, data_fim = defaults(data_ini, data_fim)
+    return q("""
+        SELECT
+            query,
+            SUM(clicks) AS clicks,
+            SUM(impressions) AS impressions,
+            CASE WHEN SUM(impressions) > 0
+                THEN ROUND(100.0 * SUM(clicks)::numeric / SUM(impressions), 2)
+                ELSE 0 END AS ctr,
+            CASE WHEN SUM(impressions) > 0
+                THEN ROUND(SUM(position * impressions)::numeric / SUM(impressions), 1)
+                ELSE 0 END AS avg_position
+        FROM gsc_queries
+        WHERE data BETWEEN %s AND %s
+        GROUP BY 1 ORDER BY 2 DESC LIMIT %s
+    """, (data_ini, data_fim, limit))
+
+
+@app.get("/api/seo/top-pages")
+def seo_top_pages(data_ini: Optional[str] = None, data_fim: Optional[str] = None, limit: int = 20):
+    data_ini, data_fim = defaults(data_ini, data_fim)
+    return q("""
+        SELECT
+            page,
+            SUM(clicks) AS clicks,
+            SUM(impressions) AS impressions,
+            CASE WHEN SUM(impressions) > 0
+                THEN ROUND(100.0 * SUM(clicks)::numeric / SUM(impressions), 2)
+                ELSE 0 END AS ctr,
+            CASE WHEN SUM(impressions) > 0
+                THEN ROUND(SUM(position * impressions)::numeric / SUM(impressions), 1)
+                ELSE 0 END AS avg_position
+        FROM gsc_pages
+        WHERE data BETWEEN %s AND %s
+        GROUP BY 1 ORDER BY 2 DESC LIMIT %s
+    """, (data_ini, data_fim, limit))
+
+
+@app.get("/api/seo/por-device")
+def seo_por_device(data_ini: Optional[str] = None, data_fim: Optional[str] = None):
+    data_ini, data_fim = defaults(data_ini, data_fim)
+    return q("""
+        SELECT
+            device,
+            SUM(clicks) AS clicks,
+            SUM(impressions) AS impressions
+        FROM gsc_queries
+        WHERE data BETWEEN %s AND %s
+        GROUP BY 1 ORDER BY 2 DESC
+    """, (data_ini, data_fim))
+
+
+@app.get("/api/seo/posicao-diaria")
+def seo_posicao_diaria(data_ini: Optional[str] = None, data_fim: Optional[str] = None):
+    data_ini, data_fim = defaults(data_ini, data_fim)
+    return q("""
+        SELECT
+            data,
+            CASE WHEN SUM(impressions) > 0
+                THEN ROUND(SUM(position * impressions)::numeric / SUM(impressions), 1)
+                ELSE 0 END AS avg_position,
+            SUM(clicks) AS clicks
+        FROM gsc_queries
+        WHERE data BETWEEN %s AND %s
+        GROUP BY 1 ORDER BY 1
+    """, (data_ini, data_fim))
+
+
+@app.get("/api/seo/queries-mensal")
+def seo_queries_mensal():
+    return q("""
+        SELECT
+            TO_CHAR(data, 'YYYY-MM') AS mes,
+            SUM(clicks) AS clicks,
+            SUM(impressions) AS impressions,
+            COUNT(DISTINCT query) AS queries
+        FROM gsc_queries
+        WHERE data >= (CURRENT_DATE - INTERVAL '12 months')
+        GROUP BY 1 ORDER BY 1
+    """)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)

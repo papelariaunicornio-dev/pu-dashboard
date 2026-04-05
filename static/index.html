@@ -146,6 +146,7 @@ tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
   <button class="tab-btn" data-tab="estoque">🗃️ Estoque</button>
   <button class="tab-btn" data-tab="frete">🚚 Frete</button>
   <button class="tab-btn" data-tab="financeiro">💰 Financeiro</button>
+  <button class="tab-btn" data-tab="seo">🔍 SEO</button>
 </div>
 
 <!-- CROSS-FILTER BAR -->
@@ -350,6 +351,47 @@ tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
       <div class="card">
         <div class="card-title">Contas a pagar por competência</div>
         <div class="chart-wrap" id="ch-fin-contas" style="height:260px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEO ── -->
+  <div class="tab-pane" id="pane-seo">
+    <div class="kpi-row cols-6" id="seo-kpis">
+      <div class="loading"><div class="spinner"></div> Carregando...</div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-title">Clicks e Impressões diários</div>
+        <div class="chart-wrap" id="ch-seo-diario" style="height:260px"></div>
+      </div>
+    </div>
+    <div class="chart-grid cols-3">
+      <div class="card">
+        <div class="card-title">Por dispositivo</div>
+        <div class="chart-wrap" id="ch-seo-device" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Posição média diária</div>
+        <div class="chart-wrap" id="ch-seo-posicao" style="height:260px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Clicks mensais (12 meses)</div>
+        <div class="chart-wrap" id="ch-seo-mensal" style="height:260px"></div>
+      </div>
+    </div>
+    <div class="chart-grid cols-2">
+      <div class="card">
+        <div class="card-title">Top queries por clicks</div>
+        <div id="tbl-seo-queries" class="table-wrap" style="max-height:440px;overflow-y:auto">
+          <div class="loading"><div class="spinner"></div> Carregando...</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Top páginas por clicks</div>
+        <div id="tbl-seo-pages" class="table-wrap" style="max-height:440px;overflow-y:auto">
+          <div class="loading"><div class="spinner"></div> Carregando...</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1045,6 +1087,136 @@ async function loadFinanceiro() {
 }
 
 // ─────────────────────────────────────────────
+// LOAD SEO
+// ─────────────────────────────────────────────
+async function loadSeo() {
+  const [kpis, diario, device, posicao, mensal, topQueries, topPages] = await Promise.all([
+    api('/api/seo/kpis'),
+    api('/api/seo/clicks-diario'),
+    api('/api/seo/por-device'),
+    api('/api/seo/posicao-diaria'),
+    api('/api/seo/queries-mensal'),
+    api('/api/seo/top-queries', {limit:30}),
+    api('/api/seo/top-pages', {limit:20}),
+  ]);
+
+  // KPIs
+  const deltaClicks = kpis?.clicks_prev > 0
+    ? ((kpis.clicks - kpis.clicks_prev) / kpis.clicks_prev * 100).toFixed(1)
+    : null;
+  const deltaImpr = kpis?.impressions_prev > 0
+    ? ((kpis.impressions - kpis.impressions_prev) / kpis.impressions_prev * 100).toFixed(1)
+    : null;
+
+  document.getElementById('seo-kpis').innerHTML = [
+    kpiCard('Clicks', fmt(kpis?.clicks,'int'),
+      deltaClicks !== null ? `${deltaClicks > 0 ? '+' : ''}${deltaClicks}% vs anterior` : '', '#5b7cff'),
+    kpiCard('Impressões', fmt(kpis?.impressions,'int'),
+      deltaImpr !== null ? `${deltaImpr > 0 ? '+' : ''}${deltaImpr}% vs anterior` : '', '#a259ff'),
+    kpiCard('CTR', fmt(kpis?.ctr,'pct'), '', '#2ecc71'),
+    kpiCard('Posição Média', kpis?.avg_position || '—', '', '#f59e0b'),
+    kpiCard('Queries Únicas', fmt(kpis?.total_queries,'int'), 'termos de busca', '#06b6d4'),
+    kpiCard('Páginas', fmt(kpis?.total_pages,'int'), 'com impressões', '#ec4899'),
+  ].join('');
+
+  // Clicks e Impressões diários
+  const ch1 = initChart('ch-seo-diario');
+  if (ch1 && diario?.length) {
+    ch1.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p => `${p[0].axisValue}<br/>${p.map(s=>`${s.marker}${s.seriesName}: <b>${fmt(s.value,'int')}</b>`).join('<br/>')}` },
+      legend: { data:['Clicks','Impressões'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: diario.map(r=>r.data), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: [
+        { type:'value', name:'Clicks', axisLabel:{color:'#7b80a0'}, splitLine:{lineStyle:{color:'#2e3248'}} },
+        { type:'value', name:'Impressões', axisLabel:{color:'#7b80a0'}, splitLine:{show:false} }
+      ],
+      series: [
+        { name:'Clicks', type:'bar', data: diario.map(r=>r.clicks), itemStyle:{color:'#5b7cff',borderRadius:[4,4,0,0]}, yAxisIndex:0 },
+        { name:'Impressões', type:'line', data: diario.map(r=>r.impressions), lineStyle:{color:'#a259ff',width:2}, symbol:'none', yAxisIndex:1,
+          areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(162,89,255,.2)'},{offset:1,color:'rgba(162,89,255,0)'}]}} }
+      ]
+    });
+  }
+
+  // Por dispositivo — donut
+  const ch2 = initChart('ch-seo-device');
+  if (ch2 && device?.length) {
+    const devLabels = {DESKTOP:'Desktop',MOBILE:'Mobile',TABLET:'Tablet'};
+    const devColors = {DESKTOP:'#5b7cff',MOBILE:'#2ecc71',TABLET:'#f59e0b'};
+    ch2.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'item', formatter:'{b}: {c} clicks ({d}%)' },
+      legend: { orient:'vertical', right:10, textStyle:{color:'#7b80a0',fontSize:11} },
+      series: [{
+        type:'pie', radius:['45%','75%'], center:['40%','50%'],
+        data: device.map(r=>({ name:devLabels[r.device]||r.device, value:r.clicks, itemStyle:{color:devColors[r.device]||'#7b80a0'} })),
+        label: { color:'#7b80a0', fontSize:11 },
+        emphasis: { itemStyle:{shadowBlur:10,shadowColor:'rgba(0,0,0,.5)'} }
+      }]
+    });
+  }
+
+  // Posição média diária
+  const ch3 = initChart('ch-seo-posicao');
+  if (ch3 && posicao?.length) {
+    ch3.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p => `${p[0].axisValue}<br/>Posição: <b>${Number(p[0].value).toFixed(1)}</b>` },
+      xAxis: { type:'category', data: posicao.map(r=>r.data), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: { type:'value', inverse:true, name:'Posição', min:1, axisLabel:{color:'#7b80a0'}, splitLine:{lineStyle:{color:'#2e3248'}} },
+      series: [{
+        type:'line', data: posicao.map(r=>r.avg_position),
+        lineStyle:{color:'#f59e0b',width:2}, symbol:'circle', symbolSize:3,
+        areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(245,158,11,.3)'},{offset:1,color:'rgba(245,158,11,0)'}]}}
+      }]
+    });
+  }
+
+  // Clicks mensais
+  const ch4 = initChart('ch-seo-mensal');
+  if (ch4 && mensal?.length) {
+    ch4.setOption({ ...CHART_THEME,
+      tooltip: { trigger:'axis', formatter: p => `${p[0].axisValue}<br/>Clicks: <b>${fmt(p[0].value,'int')}</b><br/>Queries: <b>${fmt(p[1]?.value,'int')}</b>` },
+      legend: { data:['Clicks','Queries'], textStyle:{color:'#7b80a0'}, top:0 },
+      xAxis: { type:'category', data: mensal.map(r=>r.mes), axisLabel:{color:'#7b80a0',rotate:30} },
+      yAxis: [
+        { type:'value', axisLabel:{color:'#7b80a0'}, splitLine:{lineStyle:{color:'#2e3248'}} },
+        { type:'value', name:'Queries', axisLabel:{color:'#7b80a0'}, splitLine:{show:false} }
+      ],
+      series: [
+        { name:'Clicks', type:'bar', data: mensal.map(r=>r.clicks), itemStyle:{color:'#06b6d4',borderRadius:[4,4,0,0]}, yAxisIndex:0 },
+        { name:'Queries', type:'line', data: mensal.map(r=>r.queries), lineStyle:{color:'#ec4899',width:2}, symbol:'circle', symbolSize:4, yAxisIndex:1 }
+      ]
+    });
+  }
+
+  // Tabela top queries
+  document.getElementById('tbl-seo-queries').innerHTML = topQueries?.length ? `
+    <table>
+      <thead><tr><th>Query</th><th class="num">Clicks</th><th class="num">Impressões</th><th class="num">CTR</th><th class="num">Posição</th></tr></thead>
+      <tbody>${topQueries.map(r=>`<tr>
+        <td title="${(r.query||'').replace(/"/g,'&quot;')}">${(r.query||'—').substring(0,50)}</td>
+        <td class="num">${fmt(r.clicks,'int')}</td>
+        <td class="num">${fmt(r.impressions,'int')}</td>
+        <td class="num">${fmt(r.ctr,'pct')}</td>
+        <td class="num">${Number(r.avg_position).toFixed(1)}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<div class="loading">Sem dados GSC — execute o sync</div>';
+
+  // Tabela top pages
+  const shortUrl = u => { try { return new URL(u).pathname; } catch(e) { return u; } };
+  document.getElementById('tbl-seo-pages').innerHTML = topPages?.length ? `
+    <table>
+      <thead><tr><th>Página</th><th class="num">Clicks</th><th class="num">Impressões</th><th class="num">CTR</th><th class="num">Posição</th></tr></thead>
+      <tbody>${topPages.map(r=>`<tr>
+        <td title="${(r.page||'').replace(/"/g,'&quot;')}"><code style="color:var(--accent);font-size:12px">${shortUrl(r.page||'—').substring(0,45)}</code></td>
+        <td class="num">${fmt(r.clicks,'int')}</td>
+        <td class="num">${fmt(r.impressions,'int')}</td>
+        <td class="num">${fmt(r.ctr,'pct')}</td>
+        <td class="num">${Number(r.avg_position).toFixed(1)}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<div class="loading">Sem dados GSC — execute o sync</div>';
+}
+
+// ─────────────────────────────────────────────
 // LOAD CONTROLLER
 // ─────────────────────────────────────────────
 async function loadTab(tab) {
@@ -1056,6 +1228,7 @@ async function loadTab(tab) {
     case 'estoque':    await loadEstoque();    break;
     case 'frete':      await loadFrete();      break;
     case 'financeiro': await loadFinanceiro(); break;
+    case 'seo':        await loadSeo();        break;
   }
   setTimeout(resizeAll, 150);
 }
